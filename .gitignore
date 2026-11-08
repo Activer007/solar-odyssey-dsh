@@ -1,0 +1,8 @@
+node_modules/
+dist/
+lib/
+*.tgz
+test-results/
+playwright-report/
+*.tsbuildinfo
+.DS_Store

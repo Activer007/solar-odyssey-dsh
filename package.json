@@ -1,0 +1,73 @@
+{
+  "name": "@local/solar-odyssey",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "npm run build:dsh",
+    "preview": "vite preview --host 127.0.0.1",
+    "pretest": "node scripts/asset-manifest.mjs self-test",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "assets:manifest": "node scripts/asset-manifest.mjs manifest",
+    "assets:verify": "node scripts/asset-manifest.mjs verify",
+    "assets:download": "node scripts/asset-manifest.mjs download",
+    "build:preview": "tsc -b && vite build",
+    "build:dsh": "tsc -b && node scripts/build-dsh.mjs",
+    "prepack": "npm run build:dsh"
+  },
+  "devDependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.4.0",
+    "@react-three/postprocessing": "^3.0.4",
+    "lucide-react": "^0.468.0",
+    "postprocessing": "^6.38.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "three": "^0.180.0",
+    "zustand": "^5.0.8",
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/three": "^0.180.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.12",
+    "vitest": "^3.2.4",
+    "esbuild": "0.28.2"
+  },
+  "description": "Chinese 3D solar system explorer and observation game for DeepSeek Harness.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./lib/client.js",
+    "./assets/*": "./lib/assets/*",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "lib/",
+    "locale/",
+    "icon.svg",
+    "README.md",
+    "docs/SOURCES.md",
+    "docs/assets-manifest.json"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ]
+    }
+  }
+}

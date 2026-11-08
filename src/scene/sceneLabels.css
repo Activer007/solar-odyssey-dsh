@@ -1,0 +1,9 @@
+/* Screen-space annotations are a readable aid, separate from physical body size. */
+.scene-viewport .projected-label{display:block;visibility:hidden;max-width:calc(100% - 16px);position:absolute;inset:0 auto auto 0;z-index:2;margin:0;white-space:nowrap;pointer-events:none;will-change:transform}
+.scene-viewport .projected-label.body-label{width:max-content;height:auto;min-height:28px;padding:6px 9px;font:11px "Segoe UI","Microsoft YaHei",sans-serif;letter-spacing:normal;color:#b8c9d8;background:#05080dc9;border:1px solid #7894ab55;border-radius:3px;text-shadow:none}
+.scene-viewport .projected-label.body-label::before{content:"";display:inline-block;width:7px;height:7px;margin-right:7px;vertical-align:1px;border-radius:50%;background:currentColor;box-shadow:0 0 5px #b8c9d844}
+.scene-viewport .projected-label.body-label.real-marker{width:max-content;height:auto;min-height:28px;padding:6px 9px;border:1px solid #a58b5555;border-radius:3px;background:#05080dc9;color:#d8bd89;font-size:11px}
+.scene-viewport .projected-label.body-label.real-marker small{font-size:9px;color:#9ea799;line-height:1.5;margin-top:4px}
+.scene-viewport .projected-label small{white-space:normal;max-width:205px;line-height:1.5}
+.scene-viewport .projected-label:focus-visible{outline:2px solid var(--accent,#f3ba65);outline-offset:3px}
+.scene-viewport .projected-label-leader{position:absolute;inset:0 auto auto 0;width:0;height:1px;z-index:1;visibility:hidden;pointer-events:none;background:#9fb9ce77;transform-origin:0 50%}
