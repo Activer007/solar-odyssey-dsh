@@ -29,6 +29,10 @@ export interface LabelLayoutOptions {
 
 const finiteRect = (rect: LabelRect) => [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) && rect.width > 0 && rect.height > 0;
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+const distance = (a: LabelPoint, b: LabelPoint) => Math.hypot(a.x - b.x, a.y - b.y);
+const nearestFirst = (origin: LabelPoint) => (a: LabelPoint, b: LabelPoint) => distance(a, origin) - distance(b, origin) || a.y - b.y || a.x - b.x;
+const EDGE_RESERVE = 5;
+const MAX_SLOT_REPAIR = 24;
 
 export function labelRectsOverlap(a: LabelRect, b: LabelRect, gap = 0): boolean {
   return a.x < b.x + b.width + gap && a.x + a.width + gap > b.x
@@ -48,49 +52,58 @@ export function layoutSceneLabels({ viewport, labels, obstacles = [], previous, 
       || width + padding * 2 > viewport.width || height + padding * 2 > viewport.height
       || anchor.x < -32 || anchor.y < -32 || anchor.x > viewport.width + 32 || anchor.y > viewport.height + 32) return hidden;
 
-    const blockers = [...ui, ...subjects.filter(subject => !label.fixed || subject.id !== label.id).map(subject => subject.rect)];
-    const centers: LabelPoint[] = [];
-    if (!label.fixed) {
-      const last = previous?.get(label.id);
-      if (last) centers.push({ x: anchor.x + last.x, y: anchor.y + last.y });
-    }
-    const candidates: LabelPoint[] = [{ x: anchor.x, y: anchor.y }];
-    if (!label.fixed) {
-      for (const ring of [1, 2, 3]) {
-        const dx = (width / 2 + gap + 8) * ring, dy = (height + gap) * ring;
-        for (const [x, y] of [[0, -dy], [dx, 0], [0, dy], [-dx, 0], [dx, -dy], [-dx, -dy], [dx, dy], [-dx, dy]]) {
-          candidates.push({ x: anchor.x + x, y: anchor.y + y });
-        }
-      }
-      // A large close-up body or panel needs candidates at its edges, not many tiny nudges.
-      for (const obstacle of [...blockers, ...occupied]) {
-        const left = obstacle.x - gap - width / 2, right = obstacle.x + obstacle.width + gap + width / 2;
-        const top = obstacle.y - gap - height / 2, bottom = obstacle.y + obstacle.height + gap + height / 2;
-        candidates.push({ x: left, y: anchor.y }, { x: right, y: anchor.y }, { x: anchor.x, y: top }, { x: anchor.x, y: bottom },
-          { x: left, y: top }, { x: right, y: top }, { x: left, y: bottom }, { x: right, y: bottom });
-      }
-      candidates.sort((a, b) => Math.hypot(a.x - anchor.x, a.y - anchor.y) - Math.hypot(b.x - anchor.x, b.y - anchor.y)
-        || a.y - b.y || a.x - b.x);
-    }
-    centers.push(...candidates);
-    const seen = new Set<string>();
-    for (const center of centers) {
+    const blockers = [...ui, ...subjects.filter(subject => !label.fixed || subject.id !== label.id).map(subject => subject.rect), ...occupied];
+    const place = (center: LabelPoint, clearance: number): LabelPlacement | undefined => {
       const rect = {
         x: label.fixed ? center.x - width / 2 : clamp(center.x - width / 2, padding, viewport.width - padding - width),
         y: label.fixed ? center.y - height / 2 : clamp(center.y - height / 2, padding, viewport.height - padding - height), width, height,
       };
-      const key = `${rect.x.toFixed(3)},${rect.y.toFixed(3)}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
       const offset = { x: rect.x + width / 2 - anchor.x, y: rect.y + height / 2 - anchor.y };
       if (rect.x < padding || rect.y < padding || rect.x + width > viewport.width - padding || rect.y + height > viewport.height - padding
         || Math.hypot(offset.x, offset.y) > maxDisplacement
-        || blockers.some(blocker => labelRectsOverlap(rect, blocker, gap))
-        || occupied.some(other => labelRectsOverlap(rect, other, gap))) continue;
+        || blockers.some(blocker => labelRectsOverlap(rect, blocker, clearance))) return;
       occupied.push(rect);
       const to = { x: clamp(anchor.x, rect.x, rect.x + width), y: clamp(anchor.y, rect.y, rect.y + height) };
-      return { id: label.id, visible: true, rect, offset,
-        leader: Math.hypot(to.x - anchor.x, to.y - anchor.y) > 5 ? { from: anchor, to } : undefined };
+      return { id: label.id, visible: true, rect, offset, leader: distance(to, anchor) > 5 ? { from: anchor, to } : undefined };
+    };
+    if (label.fixed) return place(anchor, gap) ?? hidden;
+
+    const edgeCandidates = (origin: LabelPoint, clearance: number) => blockers.flatMap(obstacle => {
+      // A small epsilon avoids rejecting the slot at its own floating point boundary.
+      const margin = clearance + 1e-4;
+      const left = obstacle.x - margin - width / 2, right = obstacle.x + obstacle.width + margin + width / 2;
+      const top = obstacle.y - margin - height / 2, bottom = obstacle.y + obstacle.height + margin + height / 2;
+      return [{ x: left, y: origin.y }, { x: right, y: origin.y }, { x: origin.x, y: top }, { x: origin.x, y: bottom },
+        { x: left, y: top }, { x: right, y: top }, { x: left, y: bottom }, { x: right, y: bottom }];
+    });
+    const reserve = gap + EDGE_RESERVE;
+    const last = previous?.get(label.id);
+    if (last) {
+      const center = { x: anchor.x + last.x, y: anchor.y + last.y };
+      const kept = place(center, gap);
+      if (kept) return kept;
+      // Repair a small edge crossing in place before considering a different
+      // side. The new slot carries extra clearance against the next frame.
+      const nearby = edgeCandidates(center, reserve).filter(candidate => distance(candidate, center) <= MAX_SLOT_REPAIR);
+      for (const candidate of nearby.sort(nearestFirst(center))) {
+        const repaired = place(candidate, reserve);
+        if (repaired) return repaired;
+      }
+    }
+
+    const aroundAnchor: LabelPoint[] = [anchor];
+    for (const ring of [1, 2, 3]) {
+      const dx = (width / 2 + gap + 8) * ring, dy = (height + gap) * ring;
+      for (const [x, y] of [[0, -dy], [dx, 0], [0, dy], [-dx, 0], [dx, -dy], [-dx, -dy], [dx, dy], [-dx, dy]]) {
+        aroundAnchor.push({ x: anchor.x + x, y: anchor.y + y });
+      }
+    }
+    // Prefer a buffer for moving labels, then use the regular gap in a tight layout.
+    for (const clearance of [reserve, gap]) {
+      for (const candidate of [...aroundAnchor, ...edgeCandidates(anchor, clearance)].sort(nearestFirst(anchor))) {
+        const placement = place(candidate, clearance);
+        if (placement) return placement;
+      }
     }
     return hidden;
   });

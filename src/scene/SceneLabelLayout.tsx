@@ -39,11 +39,12 @@ export function SceneLabelLayout() {
       const canvasRect = canvas.getBoundingClientRect(), parentRect = canvas.parentElement?.getBoundingClientRect();
       if (!parentRect || canvasRect.width <= 0 || canvasRect.height <= 0) return;
       const candidates: LabelCandidate[] = [];
+      const labelsEnabled = useExplorer.getState().labels;
       camera.getWorldPosition(cameraPosition);
       // Read every measurement and projection before any DOM placement writes.
       for (const entry of entries) {
         const group = entry.group.current;
-        if (!useExplorer.getState().labels || !group) continue;
+        if (!labelsEnabled || !group) continue;
         group.getWorldPosition(point);
         const parent = group.parent;
         if (entry.surface && parent) {
@@ -71,15 +72,16 @@ export function SceneLabelLayout() {
       for (const entry of entries) {
         const placement = byId.get(entry.id), visible = Boolean(placement?.visible && placement.rect);
         setSceneLabelVisible(entry.node, visible, entry.interactive);
-        entry.leader.style.visibility = 'hidden';
+        const remembered = placement?.offset ?? previous.get(entry.id);
+        if (remembered) next.set(entry.id, remembered);
+        const leaderVisibility = placement?.leader ? 'visible' : 'hidden';
+        if (entry.leader.style.visibility !== leaderVisibility) entry.leader.style.visibility = leaderVisibility;
         if (!placement?.visible || !placement.rect) continue;
         entry.node.style.transform = `translate(${placement.rect.x + offsetX}px,${placement.rect.y + offsetY}px)`;
-        if (placement.offset) next.set(entry.id, placement.offset);
         if (placement.leader) {
           const { from, to } = placement.leader;
           entry.leader.style.width = `${Math.hypot(to.x - from.x, to.y - from.y)}px`;
           entry.leader.style.transform = `translate(${from.x + offsetX}px,${from.y + offsetY}px) rotate(${Math.atan2(to.y - from.y, to.x - from.x)}rad)`;
-          entry.leader.style.visibility = 'visible';
         }
       }
       previous = next;

@@ -42,8 +42,10 @@ export function mountSceneLabel(parent: HTMLElement, { text, subtext, color, cla
 
 /** Collision-hidden labels keep their measurement but leave pointer and keyboard navigation. */
 export function setSceneLabelVisible(node: HTMLElement, visible: boolean, interactive: boolean) {
+  const visibility = visible ? 'visible' : 'hidden';
+  if (node.style.display === 'block' && node.style.visibility === visibility) return;
   node.style.display = 'block';
-  node.style.visibility = visible ? 'visible' : 'hidden';
+  node.style.visibility = visibility;
   node.style.pointerEvents = visible && interactive ? 'auto' : 'none';
   node.tabIndex = visible && interactive ? 0 : -1;
   if (interactive) (node as HTMLButtonElement).disabled = !visible;

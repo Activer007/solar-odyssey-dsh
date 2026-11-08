@@ -4,6 +4,8 @@
 
 课程第 4 步使用暖橙光球、薄红色球和紫色过渡区，并保留内层剖面。白色日冕羽流沿外缘逐渐淡出。剖面面板标注了示意配色和放大的薄层厚度。
 
+全景默认每实际秒推进 100 个模拟天，可调 1–1000 天／秒。天体特写和太阳剖面共用慢速档，默认 0.02 天／秒，最低 0.01，最高 100。两种视角分别记住各自的档位，并共享同一模拟时间与暂停状态。特写显示 UTC 时分，便于观察日内变化。
+
 ## 构建与安装
 
 需要 Node.js 22.12+、npm 和支持 WebGL 2 的浏览器或桌面环境。
@@ -13,10 +15,10 @@ npm ci
 npm pack
 ```
 
-在 DSH 的「插件」页安装生成的 `local-solar-odyssey-1.1.0.tgz`。开发时也可以先运行 `npm run build:dsh`，然后使用 Creator Mode 的 `plugin_manager`，选择 `install_bundle` 并传入项目绝对目录。安装后从侧栏打开「太阳系探索计划」（英文外壳显示 Solar Odyssey）。如果管理器返回 `restart-required`，重启相应 profile 后再打开。Web CLI 的等效操作如下。
+在 DSH 的「插件」页安装生成的 `local-solar-odyssey-1.2.0.tgz`。开发时也可以先运行 `npm run build:dsh`，然后使用 Creator Mode 的 `plugin_manager`，选择 `install_bundle` 并传入项目绝对目录。安装后从侧栏打开「太阳系探索计划」（英文外壳显示 Solar Odyssey）。如果管理器返回 `restart-required`，重启相应 profile 后再打开。Web CLI 的等效操作如下。
 
 ```powershell
-dsh plugin --profile web add ./local-solar-odyssey-1.1.0.tgz
+dsh plugin --profile web add ./local-solar-odyssey-1.2.0.tgz
 dsh --profile web
 ```
 

@@ -92,15 +92,38 @@ async function evidence(page: Page, name: string, data: unknown) {
   await page.screenshot({ path: join(output, name + '.png') });
 }
 
-test('clock: approximately 2 FPS preserves 0.1, 10 and 100 days/second with bounded visual animation', async ({ page }) => {
+test('clock: approximately 2 FPS preserves overview and close-up rates with bounded visual animation', async ({ page }) => {
   const results = [];
-  for (const [slider, speed] of [['1', 10], ['2', 100], ['-1', .1]] as const) {
-    await page.getByLabel('时间流速', { exact: true }).fill(slider);
+  const slider = page.getByLabel('时间流速', { exact: true });
+  await expect(slider).toHaveAttribute('aria-valuetext', '100 模拟天 / 实秒');
+  for (const [position, speed] of [['2', 100], ['3', 1000], ['-2', .01]] as const) {
+    if (speed === .01) await page.getByTestId('nav-earth').click();
+    await slider.fill(position);
+    await expect(slider).toHaveAttribute('aria-valuetext', `${speed} 模拟天 / 实秒`);
     await page.getByRole('button', { name: '恢复模拟', exact: true }).click();
     results.push(assertRate(await frames(page), speed));
     await page.getByRole('button', { name: '暂停模拟', exact: true }).click();
   }
   await evidence(page, 'clock-low-fps-rates', results);
+});
+
+test('clock: each view remembers its rate on the same paused timeline', async ({ page }) => {
+  const slider = page.getByLabel('时间流速', { exact: true });
+  await slider.fill('2.3');
+  await page.getByRole('button', { name: '恢复模拟', exact: true }).click();
+  await frames(page, 3);
+  await page.getByRole('button', { name: '暂停模拟', exact: true }).click();
+  const day = await page.evaluate(() => window.__solarDiagnostics!().days);
+  await page.getByTestId('nav-earth').click();
+  await expect(slider).toHaveAttribute('aria-valuetext', '0.02 模拟天 / 实秒');
+  await expect(page.getByTestId('simulation-time')).toHaveText(/^\s*\d{2}:\d{2}$/);
+  await slider.fill('-2');
+  await page.getByRole('button', { name: '太阳系全景', exact: true }).click();
+  await expect(slider).toHaveAttribute('aria-valuetext', '200 模拟天 / 实秒');
+  await page.getByTestId('nav-earth').click();
+  await expect(slider).toHaveAttribute('aria-valuetext', '0.01 模拟天 / 实秒');
+  expect(await page.evaluate(() => window.__solarDiagnostics!().days)).toBe(day);
+  await expect(page.getByRole('button', { name: '恢复模拟', exact: true })).toBeVisible();
 });
 
 test('clock: low-FPS pause, running reset and resume keep the date and following camera coherent', async ({ page }) => {
@@ -109,7 +132,7 @@ test('clock: low-FPS pause, running reset and resume keep the date and following
   await expect.poll(() => page.evaluate(() => window.__solarDiagnostics!().transitioning), { timeout: 20000 }).toBe(false);
   await page.getByRole('button', { name: '恢复模拟', exact: true }).click();
   const running = await frames(page);
-  assertRate(running, 10);
+  assertRate(running, .02);
   for (const sample of running) expect(sample.targetOffset).toBeLessThan(.001);
   await page.getByRole('button', { name: '暂停模拟', exact: true }).click();
   const paused = await frames(page, 3);
@@ -122,7 +145,7 @@ test('clock: low-FPS pause, running reset and resume keep the date and following
   await frames(page, 2);
   await page.getByRole('button', { name: '重置模拟时间至J2000', exact: true }).click();
   const reset = await frames(page);
-  assertRate(reset, 10);
+  assertRate(reset, .02);
   await page.getByRole('button', { name: '暂停模拟', exact: true }).click();
   const snapshot = await page.evaluate(() => window.__solarDiagnostics!());
   const date = new Date(Date.UTC(2000, 0, 1, 12) + snapshot.days * 86400000);

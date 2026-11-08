@@ -1,6 +1,6 @@
 import { useLayoutEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { useExplorer } from '../state/useExplorer';
+import { simulationSpeed, useExplorer } from '../state/useExplorer';
 import { simulation } from '../simulation/clock';
 
 /** A single owner for frame, playback and page-lifecycle clock boundaries. */
@@ -11,11 +11,12 @@ export function SimulationClock() {
     const window = document.defaultView;
     let pageActive = true, frozen = false;
     const visible = () => pageActive && !frozen && document.visibilityState === 'visible';
-    const { paused, speed } = useExplorer.getState();
-    simulation.start({ paused, speed, visible: visible() });
+    const initial = useExplorer.getState();
+    simulation.start({ paused: initial.paused, speed: simulationSpeed(initial), visible: visible() });
     const unsubscribe = useExplorer.subscribe((state, previous) => {
-      if (state.paused !== previous.paused || state.speed !== previous.speed) {
-        simulation.setPlayback(state);
+      const speed = simulationSpeed(state);
+      if (state.paused !== previous.paused || speed !== simulationSpeed(previous)) {
+        simulation.setPlayback({ paused: state.paused, speed });
       }
     });
     const onVisibility = () => simulation.setVisible(visible());

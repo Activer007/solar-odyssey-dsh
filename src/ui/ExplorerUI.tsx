@@ -6,7 +6,7 @@ import { SolarStructurePanel } from './SolarStructurePanel';
 import { MissionPanel } from './MissionPanel';
 import { EARTH_ORBIT_REFERENCE, J2000_ORBIT_SOURCE } from '../data/j2000Elements';
 import type { BodyData } from '../data/astronomy';
-import { useExplorer } from '../state/useExplorer';
+import { playbackRates, playbackView, simulationSpeed, useExplorer } from '../state/useExplorer';
 import { simulation } from '../simulation/orbits';
 
 function IconButton({ label, children, onClick, active = false, className = '' }: { label: string; children: ReactNode; onClick: () => void; active?: boolean; className?: string }) {
@@ -132,14 +132,50 @@ function ViewControls() {
 
 function Timeline() {
   const paused = useExplorer((s) => s.paused);
-  const speed = useExplorer((s) => s.speed);
+  const speed = useExplorer(simulationSpeed);
+  const view = useExplorer(s => playbackView(s.mode));
+  const { minLog, maxLog } = playbackRates[view];
   const scale = useExplorer((s) => s.scale);
   const set = useExplorer((s) => s.set);
+  const setSpeed = useExplorer(s => s.setSpeed);
   const [days, setDays] = useState(simulation.days);
-  useEffect(() => { setDays(simulation.days); if(paused)return; const timer = window.setInterval(() => setDays(simulation.days), 500); return () => window.clearInterval(timer); }, [paused]);
+  useEffect(() => {
+    setDays(simulation.days);
+    if (paused) return;
+    const timer = window.setInterval(() => setDays(simulation.days), 500);
+    return () => window.clearInterval(timer);
+  }, [paused, view]);
   const date = new Date(Date.UTC(2000, 0, 1, 12) + days * 86400000);
-  const dateString = `${date.getUTCFullYear()}.${String(date.getUTCMonth() + 1).padStart(2, '0')}.${String(date.getUTCDate()).padStart(2, '0')}`;
-  return <footer className="timeline"><button className="play-button" aria-label={paused ? '恢复模拟' : '暂停模拟'} onClick={() => set({ paused: !paused })}>{paused ? <Play size={20} fill="currentColor" /> : <Pause size={19} fill="currentColor" />}</button><div className="simulation-date"><span>模拟时间 <small>UTC</small></span><output data-testid="simulation-date">{dateString}</output><IconButton label="重置模拟时间至J2000" onClick={() => { simulation.resetDays(); setDays(0); }}><RotateCcw size={13} /></IconButton></div><div className="timeline-divider" /><label className="speed-control"><span>时间流速</span><input aria-label="时间流速" title="每个前台实际秒推进的模拟天数；切到后台自动停止，返回不补跳" type="range" min="-1" max="2" step="0.01" value={Math.log10(speed)} style={{ '--range-fill': `${((Math.log10(speed) + 1) / 3) * 100}%` } as React.CSSProperties} onChange={(e) => set({ speed: Number(Math.pow(10, Number(e.target.value)).toPrecision(3)) })} /><output>{speed < 1 ? speed.toFixed(1) : speed < 10 ? speed.toFixed(1) : Math.round(speed)}<small> 天 / 秒</small></output></label><div className="timeline-divider second" /><button className="scale-notice" onClick={() => set({ helpOpen: true })}><Info size={16} /><span>{scale === 'educational' ? '科普展示比例' : '真实物理比例'}<b>·</b>简化开普勒模型<b>·</b>非实时星历</span></button></footer>;
+  const twoDigits = (value: number) => String(value).padStart(2, '0');
+  const calendarAvailable = Number.isFinite(date.getTime());
+  const dateString = calendarAvailable ? `${date.getUTCFullYear()}.${twoDigits(date.getUTCMonth() + 1)}.${twoDigits(date.getUTCDate())}` : '超出日历范围';
+  const logSpeed = Math.log10(speed);
+  return <footer className="timeline">
+    <button className="play-button" aria-label={paused ? '恢复模拟' : '暂停模拟'} onClick={() => set({ paused: !paused })}>
+      {paused ? <Play size={20} fill="currentColor" /> : <Pause size={19} fill="currentColor" />}
+    </button>
+    <div className="simulation-date">
+      <span>模拟时间 <small>UTC</small></span>
+      <output><span data-testid="simulation-date">{dateString}</span>
+        {view === 'detail' && calendarAvailable && <small data-testid="simulation-time"> {twoDigits(date.getUTCHours())}:{twoDigits(date.getUTCMinutes())}</small>}
+      </output>
+      <IconButton label="重置模拟时间至J2000" onClick={() => { simulation.resetDays(); setDays(0); }}><RotateCcw size={13} /></IconButton>
+    </div>
+    <div className="timeline-divider" />
+    <label className="speed-control">
+      <span>时间流速</span>
+      <input aria-label="时间流速" aria-valuetext={`${speed} 模拟天 / 实秒`}
+        title={`${view === 'overview' ? '全景' : '特写'} · ${10 ** minLog}–${10 ** maxLog} 模拟天 / 实秒`}
+        type="range" min={minLog} max={maxLog} step="0.01" value={logSpeed}
+        style={{ '--range-fill': `${(logSpeed - minLog) / (maxLog - minLog) * 100}%` } as React.CSSProperties}
+        onChange={e => setSpeed(Number((10 ** Number(e.target.value)).toPrecision(3)))} />
+      <output>{speed}<small> 天 / 秒</small></output>
+    </label>
+    <div className="timeline-divider second" />
+    <button className="scale-notice" onClick={() => set({ helpOpen: true })}><Info size={16} />
+      <span>{scale === 'educational' ? '科普展示比例' : '真实物理比例'}<b>·</b>简化开普勒模型<b>·</b>非实时星历</span>
+    </button>
+  </footer>;
 }
 
 function SettingsContent() {
@@ -148,7 +184,7 @@ function SettingsContent() {
 }
 
 function HelpContent() {
-  return <><p className="dialog-intro">把镜头交给好奇心。每个天体都可以近距离观察。</p><div className="help-rows"><div><span>旋转视角</span><kbd>鼠标左键拖动 / 单指拖动</kbd></div><div><span>缩放</span><kbd>滚轮 / 双指缩放</kbd></div><div><span>平移</span><kbd>鼠标右键拖动</kbd></div><div><span>暂停 / 播放</span><kbd>Space</kbd></div><div><span>返回太阳系</span><kbd>Home</kbd></div><div><span>选择天体</span><kbd>1 – 9</kbd></div><div><span>关闭对话框</span><kbd>Esc</kbd></div></div><p className="simulation-note">时间流速按每个前台实际秒推进模拟天数。切到后台自动停止，返回后不补跳；手动暂停状态保持。太阳活动与能量粒子采用独立的示意动画节奏。</p><div className="panel-section"><h2>理解这个模型</h2><p>科普展示比例分别调整天体半径和轨道间距，便于辨认；真实比例保持两者比例一致。特写会自动调整观察距离。</p><p>公转采用固定 J2000 轨道根数与恒星周期推进的简化模型；地球位置以地月质心近似。模拟日期是示意时钟，不代表精确星历。太阳剖面的大气厚度、粒子大小和能量传输时间已做示意调整。</p></div><div className="panel-section"><h2>太阳内部探索</h2><p>选择太阳 → 探索内部结构 → 点击七个结构层。跟随四步讲解，或开启「能量传递演示」自由探索核聚变、辐射扩散、对流循环，以及光球与太阳大气。再次选择同一层可取消，或使用「显示全部结构」。</p></div></>;
+  return <><p className="dialog-intro">把镜头交给好奇心。每个天体都可以近距离观察。</p><div className="help-rows"><div><span>旋转视角</span><kbd>鼠标左键拖动 / 单指拖动</kbd></div><div><span>缩放</span><kbd>滚轮 / 双指缩放</kbd></div><div><span>平移</span><kbd>鼠标右键拖动</kbd></div><div><span>暂停 / 播放</span><kbd>Space</kbd></div><div><span>返回太阳系</span><kbd>Home</kbd></div><div><span>选择天体</span><kbd>1 – 9</kbd></div><div><span>关闭对话框</span><kbd>Esc</kbd></div></div><p className="simulation-note">时间流速以每实际秒推进的模拟天数计。全景默认 100 天／秒，特写默认 0.02 天／秒，最低 0.01。两种视角分别记住各自档位，共用模拟日期和暂停状态。切到后台停止，返回后继续。太阳活动与能量粒子采用独立的示意动画节奏。</p><div className="panel-section"><h2>理解这个模型</h2><p>科普展示比例分别调整天体半径和轨道间距，便于辨认；真实比例保持两者比例一致。特写会自动调整观察距离。</p><p>公转采用固定 J2000 轨道根数与恒星周期推进的简化模型；地球位置以地月质心近似。模拟日期是示意时钟，不代表精确星历。太阳剖面的大气厚度、粒子大小和能量传输时间已做示意调整。</p></div><div className="panel-section"><h2>太阳内部探索</h2><p>选择太阳 → 探索内部结构 → 点击七个结构层。跟随四步讲解，或开启「能量传递演示」自由探索核聚变、辐射扩散、对流循环，以及光球与太阳大气。再次选择同一层可取消，或使用「显示全部结构」。</p></div></>;
 }
 
 function SourcesContent() {

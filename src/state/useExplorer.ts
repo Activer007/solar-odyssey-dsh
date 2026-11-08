@@ -6,8 +6,14 @@ import { recordLessonStep, recordObservation } from './mission';
 export type { Quality } from './qualityPreference';
 export type SceneMode = 'overview' | 'body' | 'interior';
 export type ViewPreset = 'free' | 'top' | 'side' | 'night';
+export const playbackRates = {
+  overview: { minLog: 0, maxLog: 3, initial: 100 },
+  detail: { minLog: -2, maxLog: 2, initial: .02 },
+} as const;
+export const playbackView = (mode: SceneMode) => mode === 'overview' ? 'overview' : 'detail';
+
 interface ExplorerState {
-  mode: SceneMode; selected: BodyId; paused: boolean; speed: number;
+  mode: SceneMode; selected: BodyId; paused: boolean; speeds: Record<keyof typeof playbackRates, number>;
   scale: 'educational' | 'real'; quality: Quality; qualitySource: 'default' | 'manual'; orbits: boolean; labels: boolean;
   view: ViewPreset; cameraMode: 'orbit' | 'fly'; cameraRevision: number;
   selectedLayer: SolarLayerId | null; opacity: number; exploded: boolean; energy: boolean; lessonStep: number | null;
@@ -16,11 +22,16 @@ interface ExplorerState {
   setView: (view: ViewPreset) => void; resetCamera: () => void;
   selectLayer: (id: SolarLayerId | null) => void;
   startLesson: () => void; setLessonStep: (step: number) => void; leaveLesson: () => void;
+  setSpeed: (speed: number) => void;
   chooseQuality: (quality: Quality) => void;
   set: (patch: Partial<Omit<ExplorerState, 'set'>>) => void;
 }
+export const simulationSpeed = (state: Pick<ExplorerState, 'mode' | 'speeds'>) => state.speeds[playbackView(state.mode)];
+
 export const useExplorer = create<ExplorerState>((set, get) => ({
-  mode: 'overview', selected: 'sun', paused: false, speed: 10, scale: 'educational', ...initialQuality(), orbits: true, labels: true,
+  mode: 'overview', selected: 'sun', paused: false,
+  speeds: { overview: playbackRates.overview.initial, detail: playbackRates.detail.initial },
+  scale: 'educational', ...initialQuality(), orbits: true, labels: true,
   view: 'free', cameraMode: 'orbit', cameraRevision: 0, selectedLayer: null, opacity: 0.8, exploded: false, energy: false, lessonStep: null,
   flare: 0, navOpen: true, infoOpen: true, settingsOpen: false, helpOpen: false, sourcesOpen: false, missionOpen: false,
   selectBody: (selected) => {
@@ -46,6 +57,13 @@ export const useExplorer = create<ExplorerState>((set, get) => ({
     recordLessonStep(step);
   },
   leaveLesson: () => set({ lessonStep: null, selectedLayer: null, energy: false }),
+  setSpeed: (speed) => {
+    if (!Number.isFinite(speed)) return;
+    set((s) => {
+      const view = playbackView(s.mode), { minLog, maxLog } = playbackRates[view];
+      return { speeds: { ...s.speeds, [view]: Math.max(10 ** minLog, Math.min(10 ** maxLog, speed)) } };
+    });
+  },
   chooseQuality: (quality) => { saveQuality(quality); set({ quality, qualitySource: 'manual' }); },
   set: (patch) => set(patch),
 }));

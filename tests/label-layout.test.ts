@@ -92,6 +92,21 @@ describe('coordinated screen-space label layout', () => {
     expect(moved[0].offset).not.toEqual({ x: 60, y: 0 });
     assertLegal(moved, options.viewport, [label.subjectRect, panel]);
   });
+
+  it('repairs a small collision on the same side and keeps the new offset as the boundary moves', () => {
+    const viewport = { width: 300, height: 250 };
+    const label = { id: 'body-earth', anchor: { x: 150, y: 138 }, width: 60, height: 24, priority: 50 };
+    let offset = { x: 0, y: -65 };
+    for (const y of [89, 90, 88.75, 89.5, 88.5]) {
+      const planet = { x: 120, y, width: 60, height: 39 };
+      const [placement] = layoutSceneLabels({ viewport, labels: [label], obstacles: [planet], previous: new Map([[label.id, offset]]) });
+      expect(placement.visible).toBe(true);
+      expect(placement.rect!.y + placement.rect!.height).toBeLessThanOrEqual(y - 5);
+      expect(placement.offset!.y).toBeLessThan(0);
+      expect(Math.hypot(placement.offset!.x - offset.x, placement.offset!.y - offset.y)).toBeLessThan(10);
+      offset = placement.offset!;
+    }
+  });
 });
 
 describe('projected body silhouette', () => {
