@@ -62,7 +62,7 @@ export function CameraRig() {
     } else {
       const distance = (selected === 'saturn' ? 6.8 : selected === 'uranus' ? 6 : mode === 'interior' ? 4.8 : 4) * fit;
       offset.set(...(view === 'top' ? [0, distance, .001] : view === 'side' ? [0, .05, distance]
-        : [mode === 'interior' ? 1.4 : 0, mode === 'interior' ? 1 : .55, distance]) as [number, number, number]).multiplyScalar(radius);
+        : mode === 'interior' ? [distance * .7, .75, distance * .7] : [0, .55, distance]) as [number, number, number]).multiplyScalar(radius);
       if (mode === 'body' && selected !== 'sun' && (view === 'free' || view === 'night')) {
         offset.copy(focus).multiplyScalar(view === 'night' ? 1 : -1); offset.y = 0;
         offset.normalize().applyAxisAngle(camera.up, view === 'night' ? 0 : .5).multiplyScalar(distance * radius);

@@ -10,6 +10,7 @@ export function SolarStructurePanel() {
   const highlighted = s.lessonStep === null ? (s.selectedLayer ? [s.selectedLayer] : []) : solarLessons[s.lessonStep].layers;
   return <>
     <div className="info-heading"><div><h1>太阳的内部</h1><p className="english-name">BENEATH THE SURFACE</p></div><Layers3 size={25} strokeWidth={1} /></div>
+    <p className="display-scale-note" data-testid="solar-color-note"><strong>示意配色</strong> · 用颜色区分区域，薄层厚度已放大。白色羽流参考日全食可见光下的日冕形态。</p>
     <SolarLessonPanel />
     <div className="layer-selector" aria-label="太阳结构层">
       {solarLayers.map((layer, index) => <button key={layer.id} className={highlighted.includes(layer.id) ? 'selected' : ''}
@@ -38,7 +39,7 @@ export function SolarStructurePanel() {
         <Zap size={15} /><span>能量传递演示</span><span className="switch"><span /></span>
       </button>
     </div>
-    <p className="simulation-note">封闭三维剖面用于教学，真实太阳是连续等离子体，并非七个硬壳。薄层厚度、空间、时间、粒子大小及反应过程均为示意。展开时隐藏能量路径。</p>
+    <p className="simulation-note">真实太阳由连续的等离子体构成。剖面、羽流、时间、粒子大小和反应过程均为教学示意。展开时隐藏能量路径。</p>
     <button className="secondary-button" onClick={s.exitInterior}><ArrowLeft size={15} />返回太阳外部</button>
     <button className="back-overview" onClick={s.overview}>返回太阳系全景 <ArrowRight size={14} /></button>
   </>;

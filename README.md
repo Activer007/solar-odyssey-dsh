@@ -2,6 +2,8 @@
 
 一个可安装到 DeepSeek Harness 的中文 3D 科普游戏。保留 `game02` 的太阳系全景、八大行星、太阳七层剖面、四步「能量的旅程」、时间控制和画质选项。右上角的「探索任务」把课程、地球夜面和土星观察串成一次任务，完成三项观察后解锁一道科普题。画质和任务进度保存在当前浏览器或桌面环境的本地存储中。
 
+课程第 4 步使用暖橙光球、薄红色球和紫色过渡区，并保留内层剖面。白色日冕羽流沿外缘逐渐淡出。剖面面板标注了示意配色和放大的薄层厚度。
+
 ## 构建与安装
 
 需要 Node.js 22.12+、npm 和支持 WebGL 2 的浏览器或桌面环境。
@@ -11,10 +13,10 @@ npm ci
 npm pack
 ```
 
-在 DSH 的「插件」页安装生成的 `local-solar-odyssey-1.0.0.tgz`。开发时也可以先运行 `npm run build:dsh`，然后使用 Creator Mode 的 `plugin_manager`，选择 `install_bundle` 并传入项目绝对目录。安装后从侧栏打开「太阳系探索计划」（英文外壳显示 Solar Odyssey）。如果管理器返回 `restart-required`，重启相应 profile 后再打开。Web CLI 的等效操作如下。
+在 DSH 的「插件」页安装生成的 `local-solar-odyssey-1.1.0.tgz`。开发时也可以先运行 `npm run build:dsh`，然后使用 Creator Mode 的 `plugin_manager`，选择 `install_bundle` 并传入项目绝对目录。安装后从侧栏打开「太阳系探索计划」（英文外壳显示 Solar Odyssey）。如果管理器返回 `restart-required`，重启相应 profile 后再打开。Web CLI 的等效操作如下。
 
 ```powershell
-dsh plugin --profile web add ./local-solar-odyssey-1.0.0.tgz
+dsh plugin --profile web add ./local-solar-odyssey-1.1.0.tgz
 dsh --profile web
 ```
 

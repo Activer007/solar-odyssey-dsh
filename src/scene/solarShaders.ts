@@ -31,7 +31,11 @@ void main() {
 }
 `;
 
-export const interiorVertexShader = sunVertexShader.replace('vObject = normalize(position);', 'vObject = position;');
+export const interiorVertexShader = /* glsl */ `
+attribute float cutFace;
+varying float vCutFace;
+${sunVertexShader.replace('vObject = normalize(position);', 'vObject = position; vCutFace = cutFace;')}
+`;
 
 export const sunFragmentShader = /* glsl */ `
 uniform float uTime;
@@ -97,13 +101,14 @@ export const interiorFragmentShader = /* glsl */ `
 uniform vec3 uColor;
 uniform float uTime;
 uniform float uOpacity;
+uniform float uBrightness;
 uniform float uKind;
+varying float vCutFace;
 varying vec3 vObject;
 varying vec3 vWorld;
 varying vec3 vWorldNormal;
 ${noiseGLSL}
 void main(){
-  vec3 p=vWorld*.8;
   float grain=fbm(vObject*34.+vec3(uTime*.025,0.,0.));
   float rad=length(vObject);
   float rings=.5+.5*sin(rad*82.-uTime*.35);
@@ -111,9 +116,45 @@ void main(){
   float texture=mix(grain,.65*grain+.35*rings,step(.5,uKind)* (1.-step(1.5,uKind)));
   texture=mix(texture,.5*grain+.5*cell,step(1.5,uKind));
   float facing=.75+.25*abs(dot(normalize(vWorldNormal),normalize(cameraPosition-vWorld)));
-  vec3 c=uColor*(.64+texture*.76)*facing;
-  gl_FragColor=vec4(c,uOpacity);
+  vec3 c=uColor*(.58+texture*.78)*facing*uBrightness;
+  // Keep thin atmospheric bands distinct at the cut and allow a glimpse of
+  // the underlying photosphere through their curved surfaces.
+  float airBand=step(3.5,uKind);
+  float surfaceAlpha=mix(1.,.29,airBand);
+  float alpha=uOpacity*mix(surfaceAlpha,1.,vCutFace);
+  gl_FragColor=vec4(c,alpha);
   #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}
+`;
+
+export const cutawayCoronaVertexShader = /* glsl */ `
+varying vec3 vViewOffset;
+${sunVertexShader.replace('vObject = normalize(position);', 'vViewOffset = mat3(modelViewMatrix) * position;')}
+`;
+
+export const cutawayCoronaFragmentShader = /* glsl */ `
+uniform float uTime;
+uniform float uOpacity;
+uniform float uInnerRadius;
+uniform float uOuterRadius;
+varying vec3 vWorld;
+varying vec3 vWorldNormal;
+varying vec3 vViewOffset;
+void main() {
+  float mu=abs(dot(normalize(vWorldNormal),normalize(cameraPosition-vWorld)));
+  float projectedRadius=sqrt(max(0.,1.-mu*mu))*uOuterRadius;
+  float height=(projectedRadius-uInnerRadius)/(uOuterRadius-uInnerRadius);
+  if(height<=0.) discard;
+  float angle=atan(vViewOffset.y,vViewOffset.x);
+  float sweep=angle+height*(.18*sin(angle*3.+.4)+.10*cos(angle*5.));
+  float plume=pow(.5+.5*cos(sweep*7.+sin(sweep*3.)*.8),7.);
+  float filaments=pow(.5+.5*cos(sweep*41.+sin(sweep*9.)*1.1+height*3.-uTime*.15),3.);
+  float root=smoothstep(0.,.055,height);
+  float tips=1.-smoothstep(.44,.98,height);
+  float fade=exp(-height*3.6)*root*tips;
+  float alpha=uOpacity*fade*(.11+plume*(.52+.55*filaments));
+  gl_FragColor=vec4(.94,.96,1.,alpha);
   #include <colorspace_fragment>
 }
 `;

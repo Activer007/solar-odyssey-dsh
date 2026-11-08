@@ -17,7 +17,7 @@ describe('one scientific and teaching solar structure', () => {
   it('keeps seven stable layers and one canonical array for existing consumers', () => {
     expect(legacyLayers).toBe(solarLayers);
     expect(solarLayers.map(layer => layer.id)).toEqual(['core', 'radiative', 'convective', 'photosphere', 'chromosphere', 'transition', 'corona']);
-    expect(solarLayers.map(layer => layer.displayOuter)).toEqual([.25, .7, .93, 1, 1.055, 1.105, 1.22]);
+    expect(solarLayers.map(layer => layer.displayOuter)).toEqual([.25, .7, .93, 1, 1.027, 1.067, 1.48]);
     for (const [index, layer] of solarLayers.entries()) {
       expect(layer.displayInner).toBe(index ? solarLayers[index - 1].displayOuter : 0);
       expect(layer.displayOuter).toBeGreaterThan(layer.displayInner);
@@ -34,7 +34,7 @@ describe('one scientific and teaching solar structure', () => {
     expect(displayRadius('convective', 1)).toBe(.93);
     expect(solarLayers.slice(3).every(layer => layer.scientificRadius === null)).toBe(true);
     expect(displayRadius('core', -1)).toBe(0);
-    expect(displayRadius('corona', 2)).toBe(1.22);
+    expect(displayRadius('corona', 2)).toBe(1.48);
     expect(() => displayRadius('core', NaN)).toThrow(RangeError);
   });
 });

@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { SceneLabel } from './SceneLabel';
-import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, Group, Mesh, MeshBasicMaterial, Points, ShaderMaterial } from 'three';
-import { displayRadius, solarLayers } from '../data/solarStructure';
+import { AdditiveBlending, BackSide, BufferAttribute, BufferGeometry, Color, FrontSide, Group, Mesh, MeshBasicMaterial, Points, ShaderMaterial, SphereGeometry, Vector3 } from 'three';
+import { displayRadius, solarLayerById, solarLayers } from '../data/solarStructure';
 import type { SolarLayerId } from '../data/solarStructure';
 import { createSolarShellGeometry } from './solarGeometry';
 import { energyKindsForStage, energyPathColor, sampleEnergyPath } from './solarEnergy';
 import type { EnergyStage } from './solarEnergy';
-import { interiorFragmentShader, interiorVertexShader } from './solarShaders';
+import { cutawayCoronaFragmentShader, cutawayCoronaVertexShader, interiorFragmentShader, interiorVertexShader } from './solarShaders';
 import { simulation } from '../simulation/clock';
 
 export interface SolarInteriorProps {
@@ -23,28 +23,49 @@ export interface SolarInteriorProps {
   quality: 'high' | 'low';
 }
 
-function Layer({ index, selectedLayer, highlightedLayers, onSelect, opacity, exploded, paused, quality }: Omit<SolarInteriorProps, 'radius' | 'energy'> & { index: number }) {
+const coronaCenter = new Vector3(), coronaScale = new Vector3();
+const raycastCorona: Mesh['raycast'] = function (this: Mesh, raycaster, intersections) {
+  this.getWorldPosition(coronaCenter);
+  this.getWorldScale(coronaScale);
+  const { displayInner, displayOuter } = solarLayerById.corona;
+  const radius = raycaster.ray.distanceToPoint(coronaCenter) / coronaScale.x;
+  // Ignore the empty center and faded tips so the halo cannot steal clicks
+  // from the cut faces or create a large invisible interaction target.
+  if (radius < displayInner + .012 || radius > displayOuter - .055) return;
+  Mesh.prototype.raycast.call(this, raycaster, intersections);
+};
+
+function Layer({ index, selectedLayer, highlightedLayers, onSelect, opacity, exploded, paused, quality, energyStage }: Omit<SolarInteriorProps, 'radius' | 'energy'> & { index: number }) {
   const definition = solarLayers[index];
+  const corona = definition.id === 'corona';
   const group = useRef<Group>(null);
   const material = useRef<ShaderMaterial>(null);
   const time = useRef(0);
-  const geometry = useMemo(() => createSolarShellGeometry(definition.displayInner, definition.displayOuter, {
-    widthSegments: quality === 'high' ? 80 : 40, heightSegments: quality === 'high' ? 56 : 32,
-  }), [definition.displayInner, definition.displayOuter, quality]);
+  const geometry = useMemo(() => {
+    const width = quality === 'high' ? 80 : 40, height = quality === 'high' ? 56 : 32;
+    return corona ? new SphereGeometry(definition.displayOuter, width, height)
+      : createSolarShellGeometry(definition.displayInner, definition.displayOuter, { widthSegments: width, heightSegments: height });
+  }, [corona, definition, quality]);
   const selected = highlightedLayers !== undefined ? highlightedLayers.includes(definition.id) : selectedLayer === definition.id;
   const focused = highlightedLayers !== undefined || selectedLayer !== null;
   const muted = focused && !selected;
-  const targetOpacity = muted ? .045 : index < 3 ? 1 : Math.max(.1, opacity);
+  const interiorContext = muted && energyStage === 'atmosphere' && index < 3;
+  const ghosted = muted && !interiorContext;
+  const targetOpacity = ghosted ? .045 : index < 3 ? 1 : opacity;
   const uniforms = useMemo(() => ({
     uColor: { value: new Color(definition.color) }, uTime: { value: 0 },
-    uOpacity: { value: 1 }, uKind: { value: index },
-  }), [definition.color, index]);
+    uOpacity: { value: 0 }, uBrightness: { value: 1 }, uKind: { value: index },
+    uInnerRadius: { value: definition.displayInner }, uOuterRadius: { value: definition.displayOuter },
+  }), [definition, index]);
   useEffect(() => () => geometry.dispose(), [geometry]);
   useFrame((_, delta) => {
     if (!paused) time.current += simulation.animationDelta;
     if (material.current) {
       material.current.uniforms.uTime.value = time.current;
-      material.current.uniforms.uOpacity.value += (targetOpacity - material.current.uniforms.uOpacity.value) * (1 - Math.exp(-delta * 6));
+      const ease = 1 - Math.exp(-delta * 6);
+      material.current.uniforms.uOpacity.value += (targetOpacity - material.current.uniforms.uOpacity.value) * ease;
+      const targetBrightness = interiorContext ? .65 : 1;
+      material.current.uniforms.uBrightness.value += (targetBrightness - material.current.uniforms.uBrightness.value) * ease;
     }
     if (group.current) {
       const target = exploded ? (index - 2) * .155 : 0;
@@ -53,13 +74,16 @@ function Layer({ index, selectedLayer, highlightedLayers, onSelect, opacity, exp
   });
   const click = (event: import('@react-three/fiber').ThreeEvent<MouseEvent>) => { event.stopPropagation(); onSelect(definition.id); };
   return <group ref={group}>
-    <mesh geometry={geometry} onClick={click} renderOrder={muted ? index : 20 + index}>
-      <shaderMaterial ref={material} vertexShader={interiorVertexShader} fragmentShader={interiorFragmentShader} uniforms={uniforms} transparent depthWrite={!muted && index < 3} />
+    <mesh geometry={geometry} onClick={click} raycast={corona ? raycastCorona : Mesh.prototype.raycast} renderOrder={ghosted ? index : 20 + index}>
+      <shaderMaterial ref={material}
+        vertexShader={corona ? cutawayCoronaVertexShader : interiorVertexShader}
+        fragmentShader={corona ? cutawayCoronaFragmentShader : interiorFragmentShader}
+        uniforms={uniforms} transparent side={corona ? BackSide : FrontSide} toneMapped={false} depthWrite={!ghosted && index <= 3} />
     </mesh>
-    <mesh rotation={[Math.PI / 2, 0, Math.PI / 2]} raycast={() => undefined}>
+    {!corona && <mesh rotation={[Math.PI / 2, 0, Math.PI / 2]} raycast={() => undefined}>
       <torusGeometry args={[definition.displayOuter, selected ? .004 : .0015, 4, 96, Math.PI]} />
       <meshBasicMaterial color={definition.color} transparent opacity={selected ? .85 : .25} toneMapped={false} depthWrite={false} />
-    </mesh>
+    </mesh>}
     {selectedLayer === definition.id ? <SceneLabel labelId={`layer-${definition.id}`} priority={100} subjectRadius={definition.displayOuter} position={[displayRadius(definition.id, .5) * .6, displayRadius(definition.id, .5) * .8, .02]} text={definition.name} color={definition.color} className="solar-layer-label" /> : null}
   </group>;
 }

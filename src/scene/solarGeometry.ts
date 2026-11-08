@@ -13,7 +13,7 @@ export function createSolarShellGeometry(inner: number, outer: number, { widthSe
   if (!Number.isInteger(widthSegments) || widthSegments < 3 || !Number.isInteger(heightSegments) || heightSegments < 2) {
     throw new RangeError('Solar shell segments must be integers: width >= 3, height >= 2');
   }
-  const positions: number[] = [], normals: number[] = [];
+  const positions: number[] = [], normals: number[] = [], cutFaces: number[] = [];
   const startPhi = Math.PI, lengthPhi = Math.PI * 1.5;
   const point = (radius: number, theta: number, phi: number) => new Vector3(
     -radius * Math.sin(theta) * Math.cos(phi), radius * Math.cos(theta), radius * Math.sin(theta) * Math.sin(phi),
@@ -27,6 +27,7 @@ export function createSolarShellGeometry(inner: number, outer: number, { widthSe
       positions.push(vertex.x, vertex.y, vertex.z);
       const normal = faceNormal || vertex.clone().normalize().multiplyScalar(radialNormal);
       normals.push(normal.x, normal.y, normal.z);
+      cutFaces.push(faceNormal ? 1 : 0);
     }
   };
   const sphericalSurface = (radius: number, inward: boolean) => {
@@ -55,6 +56,7 @@ export function createSolarShellGeometry(inner: number, outer: number, { widthSe
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
   geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('cutFace', new Float32BufferAttribute(cutFaces, 1));
   geometry.computeBoundingSphere();
   return geometry;
 }

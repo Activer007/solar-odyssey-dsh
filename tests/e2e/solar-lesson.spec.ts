@@ -46,14 +46,23 @@ async function capture(page: Page, name: string) {
   await page.screenshot({ path: join(output, name + '.png') });
 }
 
-interface ModelImage { signature: number[]; samples: number; occupiedFraction: number; colorBuckets: number }
+interface ModelImage {
+  signature: number[];
+  samples: number;
+  occupiedFraction: number;
+  colorBuckets: number;
+  warmInterior: number;
+  redBand: number;
+  violetBand: number;
+  nearPlumes: number;
+  farPlumes: number;
+}
 async function modelImage(page: Page, extent = 6.8): Promise<ModelImage> {
   const state = await snapshot(page);
   expect(state.mode, 'this visual region must contain the solar interior itself').toBe('interior');
   const cameraDistance = distance(state.camera, state.focus);
-  // The model's displayed radius is about 6.1 world units (5 x 1.22). This
-  // padded, projected disk isolates the actual object rather than using whole
-  // canvas color statistics. The expanded model gets a separate wider extent.
+  // Isolate the projected model. Corona checks use its full extent, while the
+  // expanded model gets a separate wider crop.
   const relativeRadius = extent / cameraDistance / (2 * Math.tan(state.fov * Math.PI / 360));
   const png = await page.locator('canvas').screenshot();
   return page.evaluate(async ({ base64, center, relativeRadius }) => {
@@ -67,23 +76,38 @@ async function modelImage(page: Page, extent = 6.8): Promise<ModelImage> {
     context.drawImage(source, cx - radius, cy - radius, radius * 2, radius * 2, 0, 0, 64, 64);
     const pixels = context.getImageData(0, 0, 64, 64).data;
     const signature: number[] = [], buckets = new Set<string>();
-    let occupied = 0, samples = 0;
+    let occupied = 0, samples = 0, warmInterior = 0, redBand = 0, violetBand = 0;
+    let nearPlumes = 0, farPlumes = 0, nearSamples = 0, farSamples = 0;
     for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
-      if ((x - 31.5) ** 2 + (y - 31.5) ** 2 > 31 ** 2) continue;
+      const radial = Math.hypot(x - 31.5, y - 31.5) / 31;
+      if (radial > 1) continue;
       const i = (y * 64 + x) * 4, red = pixels[i], green = pixels[i + 1], blue = pixels[i + 2];
       signature.push(red, green, blue); samples++;
-      if (Math.max(red, green, blue) > 42 && Math.max(red, green, blue) - Math.min(red, green, blue) > 20) {
+      const brightest = Math.max(red, green, blue), darkest = Math.min(red, green, blue);
+      if (brightest > 42 && brightest - darkest > 20) {
         occupied++;
         buckets.add([red, green, blue].map(value => Math.floor(value / 48)).join(','));
       }
+      if (radial < .58 && red > 115 && green > 68 && red - blue > 43 && green - blue > 21) warmInterior++;
+      if (red > 130 && green < red * .7 && Math.abs(green - blue) < red * .2) redBand++;
+      if (blue > 105 && blue > red * 1.07 && red > green * 1.08) violetBand++;
+      const nearWhite = darkest > 40 && brightest - darkest < 23;
+      if (radial >= .69 && radial < .87) { nearSamples++; if (nearWhite) nearPlumes++; }
+      if (radial >= .89) { farSamples++; if (nearWhite) farPlumes++; }
     }
-    return { signature, samples, occupiedFraction: occupied / samples, colorBuckets: buckets.size };
+    return { signature, samples, occupiedFraction: occupied / samples, colorBuckets: buckets.size,
+      warmInterior, redBand, violetBand, nearPlumes: nearPlumes / nearSamples, farPlumes: farPlumes / farSamples };
   }, { base64: png.toString('base64'), center: state.projectedTarget, relativeRadius });
 }
 function assertModelVisible(image: ModelImage, minimum = .08) {
   expect(image.samples, 'projected object region must contain enough image samples').toBeGreaterThan(2500);
   expect(image.occupiedFraction, 'the solar model must actually render in its projected region').toBeGreaterThan(minimum);
   expect(image.colorBuckets, 'the cutaway must retain visible material detail').toBeGreaterThan(2);
+}
+function assertCoronaVisible(image: ModelImage) {
+  expect(image.nearPlumes, 'white streamers should occupy part of the outer annulus').toBeGreaterThan(.035);
+  expect(image.nearPlumes, 'the halo should retain gaps between streamers').toBeLessThan(.45);
+  expect(image.farPlumes, 'white streamers should fade toward their tips').toBeLessThan(image.nearPlumes * .55);
 }
 async function visualSettled(page: Page, extent = 6.8) {
   let previous = await modelImage(page, extent), stable = 0;
@@ -147,8 +171,18 @@ test('stage 2: four teaching steps link layers, explanations and animated struct
   for (const index of [1, 2, 3]) {
     await page.getByTestId('lesson-next').click();
     await assertStep(page, index);
-    assertModelVisible(await modelImage(page, lessonExtent(index)));
+    if (index === 3) await page.getByRole('button', { name: '暂停模拟', exact: true }).click();
+    const image = index === 3 ? await visualSettled(page, lessonExtent(index)) : await modelImage(page, lessonExtent(index));
+    assertModelVisible(image);
+    if (index === 3) {
+      await expect(page.getByTestId('solar-color-note')).toContainText('示意配色');
+      expect(image.warmInterior).toBeGreaterThan(250);
+      expect(image.redBand).toBeGreaterThan(25);
+      expect(image.violetBand).toBeGreaterThan(12);
+      assertCoronaVisible(image);
+    }
     await capture(page, 'stage2-lesson-' + (index + 1));
+    if (index === 3) await page.getByRole('button', { name: '恢复模拟', exact: true }).click();
   }
   await expect(page.getByTestId('lesson-next')).toBeDisabled();
   await expect(page.locator('.lesson-card')).toContainText('传导');
@@ -177,7 +211,7 @@ test('stage 2: four teaching steps link layers, explanations and animated struct
   await expect(page.getByRole('heading', { name: '我们的太阳系', exact: true })).toBeVisible();
 });
 
-test('stage 2: seven cancellable layers render from the rear, with transparency and closed expanded shells', async ({ page }) => {
+test('stage 2: seven cancellable layers render from the front and rear with opacity and expansion', async ({ page }) => {
   test.setTimeout(240000);
   await page.getByTestId('show-all-layers').click();
   for (const id of Object.keys(layerNames) as SolarLayerId[]) {
@@ -187,7 +221,9 @@ test('stage 2: seven cancellable layers render from the rear, with transparency 
     await expect(layer).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('.layer-detail h2')).toHaveText(name);
     await expect(page.locator('.layer-detail .source-link')).toHaveAttribute('href', /^https:\/\//);
-    assertModelVisible(await visualSettled(page, layerExtent(id)));
+    const image = await visualSettled(page, layerExtent(id));
+    if (id === 'corona') assertCoronaVisible(image);
+    else assertModelVisible(image);
     await capture(page, 'stage2-layer-' + id + '-front');
     await layer.click();
     await expect(layer).toHaveAttribute('aria-pressed', 'false');
@@ -217,7 +253,9 @@ test('stage 2: seven cancellable layers render from the rear, with transparency 
     await layer.click();
     await expect(layer).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('.layer-detail h2')).toHaveText(layerNames[id]);
-    assertModelVisible(await visualSettled(page, layerExtent(id)));
+    const image = await visualSettled(page, layerExtent(id));
+    if (id === 'corona') assertCoronaVisible(image);
+    else assertModelVisible(image);
     await capture(page, 'stage2-layer-' + id + '-rear');
     await layer.click();
     await expect(layer).toHaveAttribute('aria-pressed', 'false');
