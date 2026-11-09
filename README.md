@@ -2,7 +2,21 @@
 
 在 DeepSeek Harness 侧栏打开太阳系，观察太阳与八大行星的运动，进入太阳七层剖面，跟随四步课程了解能量如何向外传递。游戏界面为中文，渲染与纹理资源随包提供，游玩无需模型 API。
 
-![在 DSH 侧栏打开的太阳系全景，行星标签沿轨道分布，底部显示模拟时钟与流速](docs/images/dsh-overview.png)
+![太阳系全景，以太阳为中心，标注八大行星及各自的公转轨道](docs/images/dsh-overview.png)
+
+## 实机画面
+
+### 太阳
+
+![太阳特写，展示明亮的光球、太阳黑子与外缘的日珥](docs/images/dsh-sun.png)
+
+### 地球
+
+![地球特写，展示大陆、海洋、云层与蓝色大气边缘](docs/images/dsh-earth.png)
+
+### 土星
+
+![土星特写，从斜上方观察土星环与行星云带](docs/images/dsh-saturn.png)
 
 ## 安装到 DSH
 
